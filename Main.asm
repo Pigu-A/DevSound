@@ -24,51 +24,52 @@ include	"hardware.inc"
 ; Reset vectors (actual ROM starts here)
 ; ================================================================
 
-SECTION	"Reset $00",HOME[$00]
+SECTION	"Reset $00",ROM0[$00]
 Reset00:	ret
 
-SECTION	"Reset $08",HOME[$08]
+SECTION	"Reset $08",ROM0[$08]
 Reset08:	ret
 
-SECTION	"Reset $10",HOME[$10]
+SECTION	"Reset $10",ROM0[$10]
 Reset10:	ret
 
-SECTION	"Reset $18",HOME[$18]
+SECTION	"Reset $18",ROM0[$18]
 Reset18:	ret
 
-SECTION	"Reset $20",HOME[$20]
+SECTION	"Reset $20",ROM0[$20]
 Reset20:	ret
 
-SECTION	"Reset $28",HOME[$28]
+SECTION	"Reset $28",ROM0[$28]
 Reset28:	ret
 
-SECTION	"Reset $30",HOME[$30]
+SECTION	"Reset $30",ROM0[$30]
 Reset30:	ret
 
-SECTION	"Reset $38",HOME[$38]
+SECTION	"Reset $38",ROM0[$38]
 Reset38:	jp	ErrorHandler
 
 ; ================================================================
 ; Interrupt vectors
 ; ================================================================
 
-SECTION	"VBlank interrupt",HOME[$40]
+SECTION	"VBlank interrupt",ROM0[$40]
 IRQ_VBlank:
-	reti
+	jp	DoVBlank
 
-SECTION	"LCD STAT interrupt",HOME[$48]
+SECTION	"LCD STAT interrupt",ROM0[$48]
 IRQ_STAT:
 	reti
 
-SECTION	"Timer interrupt",HOME[$50]
+SECTION	"Timer interrupt",ROM0[$50]
 IRQ_Timer:
+	call	DS_Play
 	reti
 
-SECTION	"Serial interrupt",HOME[$58]
+SECTION	"Serial interrupt",ROM0[$58]
 IRQ_Serial:
 	reti
 
-SECTION	"Joypad interrupt",Home[$60]
+SECTION	"Joypad interrupt",ROM0[$60]
 IRQ_Joypad:
 	reti
 	
@@ -82,7 +83,7 @@ include	"SystemRoutines.asm"
 ; ROM header
 ; ================================================================
 
-SECTION	"ROM header",HOME[$100]
+SECTION	"ROM header",ROM0[$100]
 
 EntryPoint:
 	nop
@@ -142,7 +143,9 @@ ProgramStart:
 	ld	a,%11100100			; 3 2 1 0
 	ldh	[rBGP],a			; set background palette
 
-	ld	a,IEF_VBLANK
+	xor	a
+	ldh	[rTAC],a
+	ld	a,IEF_VBLANK+IEF_TIMER
 	ldh	[rIE],a				; set VBlank interrupt flag
 		
 	ld	a,%10010001			; LCD on + BG on + BG $8000
@@ -158,7 +161,16 @@ ProgramStart:
 	ei
 	
 MainLoop:
-	; draw song id
+	halt				; update sound
+	
+	ld	a,$e4			; restore palette
+	ldh	[rBGP],a		; (stop drawing CPU meter)
+	jr	MainLoop
+	
+DoVBlank:
+	push	af
+	push	bc
+	push	hl
 	ld	a,[CurrentSong]
 	if	UseDecimal
 		ld	hl,$98b2
@@ -167,26 +179,11 @@ MainLoop:
 		ld	hl,$98b1
 		call	DrawHex
 	endc
-.loop	
-	ld	a,[rLY]			; wait for scanline 0
-	and	a
-	jp	nz,.loop
-	ldh	a,[rBGP]		; get current palette
-	ld	b,a				; copy to B for later use
-	xor	$ff				; invert palette
-	ldh	[rBGP],a		; (draw CPU meter from top of screen)
-	call	DS_Play		; update sound
-	
-	ldh	a,[rLY]			; get current scanline
-	ld	c,a
-	ld	a,b				; restore palette
-	ldh	[rBGP],a		; (stop drawing CPU meter)
-	halt				; wait for VBlank
-	
-	ld	a,c
+	ld	a,[RasterTime]
 	ld	hl,$9a11		; raster time display address in VRAM
 	call	DrawHex		; draw raster time
-		; playback controls
+	ei	; vblank-sensitive stuff end, let the song update normally
+	; playback controls
 	call	CheckInput
 	ld	a,[sys_btnPress]
 	bit	btnUp,a
@@ -205,46 +202,49 @@ MainLoop:
 	jr	nz,.fadeout
 	bit	btnSelect,a
 	jr	nz,.fadein
-	jr	.continue
+	jr	.done
 
 .add1
 	ld	a,[CurrentSong]
 	inc	a
 	ld	[CurrentSong],a
-	jr	.continue
+	jr	.done
 .sub1
 	ld	a,[CurrentSong]
 	dec	a
 	ld	[CurrentSong],a
-	jr	.continue
+	jr	.done
 .add16
 	ld	a,[CurrentSong]
 	add	16
 	ld	[CurrentSong],a
-	jr	.continue
+	jr	.done
 .sub16
 	ld	a,[CurrentSong]
 	sub	16
 	ld	[CurrentSong],a
-	jr	.continue
+	jr	.done
 .loadSong
 	ld	a,[CurrentSong]
 	call	DS_Init
-	jr	.continue
+	jr	.done
 .stopSong
 	call	DS_Stop
-	jr	.continue
+	jr	.done
 .fadeout
 	ld	a,2
 	call	DS_Fade
-	jr	.continue
+	jr	.done
 .fadein	
 	ld	a,[CurrentSong]
 	call	DS_Init
 	ld	a,1
 	call	DS_Fade
-.continue
-	jp	MainLoop
+.done
+	pop	hl
+	pop	bc
+	pop	af
+	reti
 	
 ; ================================================================
 ; Graphics data

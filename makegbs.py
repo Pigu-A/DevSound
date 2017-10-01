@@ -1,18 +1,20 @@
-# makegbs.py - create GBS file from GBSHeader.bin and DevSound.gb
+# makegbs.py - create GBS file from DevSound.gbs.tmp
 
 # open files
-HdrFile = open("GBSHeader.bin", "rb")   # GBS header
-ROMFile = open("DevSound.gb", "rb")     # demo ROM
+ROMFile = open("DevSound.gbs.tmp", "rb")     # temp
 OutFile = open("DevSound.gbs", "wb")    # output file
 
-# copy header
-OutFile.write(HdrFile.read(0x70))       # write GBS header
+# find end of data
+endpos = ROMFile.seek(-1,2)
+while endpos >= 0x400:
+    if ROMFile.read(1)[0] != 0xff: break;
+    ROMFile.seek(-2,1)
+    endpos -= 1
 
-# copy DevSound + song data
-ROMFile.seek(0x4000)                    # relevant data starts at offset 0x4000
-OutFile.write(ROMFile.read(0x4000))     # write song data
+# copy song data
+ROMFile.seek(0x390)
+OutFile.write(ROMFile.read(endpos - 0x390))       # write song data
 
 # close files
-HdrFile.close()
 ROMFile.close()
 OutFile.close()

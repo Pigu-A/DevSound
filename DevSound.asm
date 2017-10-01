@@ -42,6 +42,7 @@ DS_Fade:	jp	DevSound_Fade
 
 ; Driver thumbprint
 db	"DevSound GB music player by DevEd | email: deved8@gmail.com"
+db	" | wave samples entension by Pigu"
 
 ; ================================================================
 ; Init routine
@@ -125,17 +126,18 @@ DevSound_Init:
 	ld	[CH4Pan],a
 	; get tempo
 	ld	hl,SongSpeedTable
-	ld	a,d		; Retrieve song ID one last time
-	add	a
-	add	l
-	ld	l,a
-	jr	nc,.nocarry2
-	inc	h
-.nocarry2
+	ld	e,d		; Retrieve song ID one last time
+	ld	d,0
+	add	hl,de
+	add	hl,de
+	add	hl,de
+	ld	a,[hl+]
+	ld	[ExtTimer],a
+	ld	[ExtSpeed],a
 	ld	a,[hl+]
 	dec	a
 	ld	[GlobalSpeed1],a
-	ld	a,[hl]
+	ld	a,[hl+]
 	dec	a
 	ld	[GlobalSpeed2],a
 	ld	a,%10000000
@@ -144,6 +146,13 @@ DevSound_Init:
 	ldh	[rNR51],a
 	ld	a,7
 	ld	[GlobalVolume],a
+	ld	a,$ce
+	ldh	[rTMA],a
+	ldh	[rTIMA],a
+	ld	a,TACF_START + TACF_16KHZ
+	ldh	[rTAC],a
+	ld	a,$1
+	ld	[rROMB0],a
 	ret
 
 ; ================================================================
@@ -152,6 +161,7 @@ DevSound_Init:
 
 DevSound_Stop:
 	xor	a
+	ldh	[rTAC],a
 	ldh	[rNR52],a
 	ld	[CH1Enabled],a
 	ld	[CH2Enabled],a
@@ -207,14 +217,51 @@ DevSound_Play:
 	push	af
 	ld	a,[SoundEnabled]
 	and	a
-	jr	nz,.doUpdate	; if sound is enabled, jump ahead
+	jr	z,.skip	; if sound is enabled, jump ahead
+	push	bc
+	push	de
+	push	hl
+	ld	a,[SampUpdate]
+	and	a
+	call	nz,UpdateSample
+	ld	a,[ExtTimer]
+	dec	a
+	ld	[ExtTimer],a
+	jr	nz,.skip2
+	; prevents race conditions, but update rate would be
+	; really fast in order to make that happen...
+	ld	a,[DSUpdating]
+	and	a
+	jr	nz,.skip2
+	ld	a,[rLY]
+	push	af
+	ld	a,1
+	ld	[DSUpdating],a
+	ei	; let vblank and sample update happen
+	call	.doUpdate
+	xor	a
+	ld	[DSUpdating],a
+	pop	af
+	ld	c,a
+	ld	a,[rLY]
+	sub	c
+	jr	nc,.nocarry
+	add	153
+.nocarry
+	ld	[RasterTime],a
+.skip2
+	pop	hl
+	pop	de
+	pop	bc
+.skip
 	pop	af
 	ret
 	
 .doUpdate
-	push	bc
-	push	de
-	push	hl
+	ld	a,$1b
+	ld	[rBGP],a
+	ld	a,[ExtSpeed]
+	ld	[ExtTimer],a
 	; get song timer
 	ld	a,[GlobalTimer]	; get global timer
 	and	a				; is GlobalTimer non-zero?
@@ -336,7 +383,7 @@ CH1_CheckByte:
 	ld	a,[hl+]
 	ld	h,[hl]
 	ld	l,a
-	jp	[hl]
+	jp	hl
 	
 .endChannel
 	xor	a
@@ -673,7 +720,7 @@ CH2_CheckByte:
 	ld	a,[hl+]
 	ld	h,[hl]
 	ld	l,a
-	jp	[hl]
+	jp	hl
 	
 .endChannel
 	xor	a
@@ -934,9 +981,9 @@ CH3_CheckByte:
 	ld	a,[hl+]		; get byte
 	inc	c			; add 1 to offset
 	cp	$ff
-	jr	z,.endChannel
+	jp	z,.endChannel
 	cp	$c9
-	jr	z,.retSection
+	jp	z,.retSection
 	bit	7,a			; check for command
 	jr	nz,.getCommand
 	; if we have a note...
@@ -962,6 +1009,19 @@ CH3_CheckByte:
 	ld	a,[CH3Reset]
 	and	a
 	jp	nz,CH3_DoneUpdating
+	
+	ld	a,[CH3SampMode]
+	and	a
+	jr	z,.normal
+	ld	a,[SampStart]
+	ld	[SampCurAddr],a
+	ld	a,[SampStart+1]
+	ld	[SampCurAddr+1],a
+	ld	a,[SampLength]
+	ld	[SampCount],a
+	ld	a,[SampLength+1]
+	ld	[SampCount+1],a
+.normal
 	xor	a
 	ld	[CH3WavePos],a
 	ld	a,[CH3NoteCount]
@@ -1003,11 +1063,12 @@ CH3_CheckByte:
 	ld	a,[hl+]
 	ld	h,[hl]
 	ld	l,a
-	jp	[hl]
+	jp	hl
 	
 .endChannel
 	xor	a
 	ld	[CH3Enabled],a
+	ld	[SampUpdate],a
 	jp	UpdateCH4
 	
 .retSection
@@ -1247,9 +1308,51 @@ CH3_SetInstrument:
 	ld	[CH3ArpPtr+1],a
 	; wave table
 	ld	a,[hl+]
+	cp	$e0	; sample
+	jr	nz,.normal
+	ld	a,[hl+]
+	push	hl
+	ld	l,a
+	ld	h,0
+	add	hl,hl	; x8
+	add	hl,hl
+	add	hl,hl
+	ld	de,SampleTable
+	add	hl,de
+	xor	a
+	ld	[SampUpdate],a
+	ld	a,[hl+]
+	ld	[SampBank],a
+	ld	a,[hl+]
+	ld	[SampStart],a
+	ld	a,[hl+]
+	ld	[SampStart+1],a
+	ld	a,[hl+]
+	ld	[SampCount],a
+	ld	[SampLength],a
+	ld	a,[hl+]
+	ld	[SampCount+1],a
+	ld	[SampLength+1],a
+	ld	a,[hl+]
+	ld	[SampLoop],a
+	ld	a,[hl+]
+	ld	[SampLoop+1],a
+	ld	a,[hl]
+	ld	[SampTranspose],a
+	ld	a,1
+	ld	[CH3SampMode],a
+	ld	a,%00100000
+	ld	[CH3Vol],a
+	ldh	[rNR32],a
+	pop	hl
+	jr	.done
+.normal
 	ld	[CH3WavePtr],a
+	xor	a
+	ld	[CH3SampMode],a
 	ld	a,[hl+]
 	ld	[CH3WavePtr+1],a
+.done
 	; vib table
 	ld	a,[hl+]
 	ld	[CH3VibPtr],a
@@ -1350,7 +1453,7 @@ CH4_CheckByte:
 	ld	a,[hl+]
 	ld	h,[hl]
 	ld	l,a
-	jp	[hl]
+	jp	hl
 	
 .endChannel
 	xor	a
@@ -2057,6 +2160,7 @@ CH3_UpdateRegisters:
 	xor	a
 	ldh	[rNR32],a
 	ld	[CH3Vol],a
+	ld	[SampUpdate],a
 	ldh	a,[rNR34]
 	or	%10000000
 	ldh	[rNR34],a
@@ -2106,7 +2210,15 @@ CH3_UpdateRegisters:
 	ld	c,a
 	ld	b,0
 	
+	ld	a,[CH3SampMode]
+	and	a
 	ld	hl,FreqTable
+	jr	z,.normal
+	ld	a,[SampTranspose]
+	add	c
+	ld	c,a
+	ld	hl,SampFreqTable
+.normal
 	add	hl,bc
 	add	hl,bc
 	
@@ -2159,7 +2271,47 @@ CH3_UpdateRegisters:
 	ld	a,d
 	add	c
 	ld	d,a
-.setFreq	
+.setFreq
+	ld	a,[CH3SampMode]
+	and	a
+	jr	z,.normal2
+	
+	ld	a,d
+	ld	[SampFreq],a
+	ld	a,e
+	ld	[SampFreq+1],a
+	ld	a,1
+	ld	[SampUpdate],a
+.updateSampVolume
+	ld	hl,CH3VolPtr
+	ld	a,[hl+]
+	ld	h,[hl]
+	ld	l,a
+	ld	a,[CH3VolPos]
+	add	l
+	ld	l,a
+	jr	nc,.nocarry6
+	inc	h
+.nocarry6
+	ld	a,[hl+]
+	cp	$ff
+	jr	z,.done2
+	ld	[SampVol],a
+	ld	a,%00100000
+	ld	[CH3Vol],a
+	ldh	[rNR32],a
+	ld	a,[CH3VolPos]
+	inc	a
+	ld	[CH3VolPos],a
+	ld	a,[hl+]
+	cp	$80
+	jr	nz,.done2
+	ld	a,[hl]
+	ld	[CH3VolPos],a
+.done2
+	jp CH4_UpdateRegisters	; anything past this is for normal wave
+	
+.normal2
 	ld	a,d
 	ldh	[rNR33],a
 	ld	a,e
@@ -2271,7 +2423,7 @@ CH3_UpdateRegisters:
 CH4_UpdateRegisters:
 	ld	a,[CH4Enabled]
 	and	a
-	jp	z,DoneUpdatingRegisters
+	ret	z
 	
 	if(UseFXHammer)
 	ld	a,[$c7d9]
@@ -2378,12 +2530,6 @@ CH4_UpdateRegisters:
 	ld	a,[hl]
 	ld	[CH4VolPos],a
 .done
-	
-DoneUpdatingRegisters:
-	pop	hl
-	pop	de
-	pop	bc
-	pop	af
 	ret
 
 ; ================================================================
@@ -2393,13 +2539,12 @@ DoneUpdatingRegisters:
 LoadWave:
 	xor	a
 	ldh	[rNR30],a	; disable CH3
-	ld	bc,$1030	; b = counter, c = HRAM address
-.loop
-	ld	a,[hl+]		; get byte from hl
-	ld	[c],a		; copy to wave ram
-	inc	c
-	dec	b
-	jr	nz,.loop	; loop until done
+CUR_WAVE = waveBuffer
+rept 16
+	ld a, [hli]
+	ldh [CUR_WAVE], a
+CUR_WAVE = CUR_WAVE + 1
+endr
 	ld	a,%10000000
 	ldh	[rNR30],a	; enable CH3
 	ret
@@ -2584,6 +2729,128 @@ DoRandomizer:
 	ld	[RandomizerTimer],a
 	call	_RandomizeWave
 	ret
+
+; ================================================================
+; Sample routines
+; ================================================================
+
+UpdateSample:
+	ld	a,$e9
+	ld	[rBGP],a
+	ld	hl,SampBuffer
+	ld	a,[SampCurAddr]
+	ld	e,a
+	ld	a,[SampCurAddr+1]
+	ld	d,a
+	ld	a,[SampCount]
+	ld	c,a
+	ld	a,[SampCount+1]
+	ld	b,a
+	ld	a,16
+
+.loop
+	push	af
+	ld	a,[de]
+	inc	de
+	ld	[hl+],a
+	dec	bc
+	ld	a,b
+	or	c
+	jr	nz,.notendedyet
+	ld	a,[SampLoop]
+	ld	c,a
+	ld	a,[SampLoop+1]
+	ld	b,a
+	or	c
+	jr	z,.endoneshot
+	ld	a,e
+	sub	c
+	ld	e,a
+	ld	a,d
+	sbc	b
+	ld	d,a
+.notendedyet
+	pop	af
+	dec	a
+	jr	nz,.loop
+	
+	ld	a,c
+	ld	[SampCount],a
+	ld	a,b
+	ld	[SampCount+1],a
+	ld	a,e
+	ld	[SampCurAddr],a
+	ld	a,d
+	ld	[SampCurAddr+1],a
+	di
+	ldh	a,[rNR51]
+	ld	c,a
+	and	%10111011
+	ldh	[rNR51],a	; prevents spike noise in GBA
+	ld	hl,SampBuffer
+	call	LoadWave
+	ld	a,$9c
+	ldh	[rNR33],a
+	ld	a,$87
+	ldh	[rNR34],a
+	ld	a,c
+	ldh	[rNR51],a
+	reti
+
+.endoneshot
+	pop	af
+	xor	a
+	ldh	[rNR30],a
+	ld	[SampUpdate],a
+	ret
+
+.getsrc
+	push	de
+	ld	a,[SampFreqCount]
+	add	e
+	ld	[SampFreqCount],a
+	ld	a,d
+	jr	nc,.nocarry
+	inc	a
+.nocarry
+	and	a
+	jr	z,.noadvance
+.advanceloop
+	ld	a,[SampCurNybble]
+	xor	1
+	ld	[SampCurNybble],a
+	jr	nz,.noadvance2
+	inc	bc
+.noadvance2
+	dec	a
+	jr	nz,.advanceloop
+.noadvance
+	ld	a,[SampCurNybble]
+	and	a
+	ld	a,[bc]
+	pop	de
+	ret
+
+PcktM_MultiplyVolume:
+	srl	b
+	push	af
+	ld	l,b
+	ld	h,0
+	ld	b,h
+	add	hl,hl	; x2
+	add	hl,hl	; x4
+	add	hl,hl	; x8
+	add	hl,hl	; x16
+	add	hl,bc
+	ld	bc,VolTable
+	add	hl,bc
+	pop	af
+	ld	a,[hl]
+	jr	nc,.noswap
+	swap	a
+.noswap
+	and	$f
+	ret
 	
 ; ================================================================
 ; Misc routines
@@ -2668,6 +2935,17 @@ FreqTable:  ; TODO: Add at least one extra octave
 	dw	$7c1,$7c4,$7c8,$7cb,$7ce,$7d1,$7d4,$7d6,$7d9,$7db,$7dd,$7df ; octave 6
 	dw	$7e0,$7e2,$7e4,$7e5,$7e7,$7e8,$7ea,$7eb,$7ec,$7ee,$7ee,$7ef ; octave 7 (not used directly, is slightly out of tune)
 	
+SampFreqTable:
+; = 2048*n/25 Hz, C-4 (after transpositon) = 8355.84Hz
+;	     C-x  C#x  D-x  D#x  E-x  F-x  F#x  G-x  G#x  A-x  A#x  B-x
+	dw	  $d,  $d,  $e,  $f, $10, $11, $12, $13, $14, $15, $17, $18 ; octave 1
+	dw	 $19, $1b, $1d, $1e, $20, $22, $24, $26, $28, $2b, $2d, $30 ; octave 2
+	dw	 $33, $36, $39, $3c, $40, $44, $48, $4c, $51, $55, $5b, $60 ; octave 3
+	dw	 $66, $6c, $72, $79, $80, $88, $90, $98, $a1, $ab, $b5, $c0 ; octave 4
+	dw	 $cb, $d7, $e4, $f2,$100,$10f,$11f,$130,$143,$156,$16a,$180 ; octave 5
+	dw	$196,$1af,$1c8,$1e3,$200,$21e,$23f,$261,$285,$2ab,$2d4,$2ff ; octave 6
+	dw	$32d,$35d,$390,$3c7,$400,$43d,$47d,$4c2,$50a,$557,$5a8,$5fe ; octave 7
+	
 NoiseTable:	; taken from deflemask
 	db	$a4	; 15 steps
 	db	$97,$96,$95,$94,$87,$86,$85,$84,$77,$76,$75,$74,$67,$66,$65,$64
@@ -2681,10 +2959,28 @@ NoiseTable:	; taken from deflemask
 ; ================================================================
 ; misc stuff
 ; ================================================================
+
+VolTable:
+	db $00, $00, $00, $00, $00, $00, $00, $00 ; 10
+	db $10, $10, $10, $10, $10, $10, $10, $10
+	db $00, $00, $00, $00, $10, $11, $11, $11 ; 32
+	db $21, $21, $21, $22, $32, $32, $32, $32
+	db $00, $00, $10, $11, $11, $21, $22, $22 ; 54
+	db $32, $32, $33, $43, $43, $44, $54, $54
+	db $00, $00, $11, $11, $22, $22, $32, $33 ; 76
+	db $43, $44, $54, $54, $65, $65, $76, $76
+	db $00, $00, $11, $21, $22, $33, $43, $44 ; 98
+	db $54, $55, $65, $76, $77, $87, $98, $98
+	db $00, $11, $11, $22, $33, $43, $44, $55 ; ba
+	db $65, $76, $77, $87, $98, $a9, $a9, $ba
+	db $00, $11, $22, $33, $43, $44, $55, $66 ; dc
+	db $76, $87, $98, $99, $a9, $ba, $cb, $dc
+	db $00, $11, $22, $33, $44, $55, $66, $77 ; fe
+	db $87, $98, $a9, $ba, $cb, $dc, $ed, $fe
 	
 DefaultRegTable:
 	; global flags
-	db	7,0,0,0,0,0,0,1,1,1,1,1
+	db	7,0,0,0,0,0,0,1,0,0,0,1,1,1,1
 	; ch1
 	dw	DummyTable,DummyTable,DummyTable,DummyTable,DummyTable
 	db	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
@@ -2716,3 +3012,5 @@ DummyChannel:
 ; ================================================================
 
 	include	"DevSound_SongData.asm"
+	
+	db	0 ; let makegbs.py know the proper end of data

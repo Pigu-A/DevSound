@@ -5,7 +5,7 @@
 if !def(incDSVars)
 incDSVars	set	1
 
-SECTION	"DevSound variables",BSS
+SECTION	"DevSound variables",WRAM0
 
 DSVarsStart
 
@@ -17,6 +17,10 @@ TickCount		ds	1
 FadeTimer		ds	1
 FadeType		ds	1
 SoundEnabled	ds	1
+
+ExtTimer		ds	1
+ExtSpeed		ds	1
+DSUpdating		ds	1
 
 CH1Enabled		ds	1
 CH2Enabled		ds	1
@@ -100,6 +104,7 @@ CH3NoteCount	ds	1
 CH3InsMode		ds	1
 CH3Ins1			ds	1
 CH3Ins2			ds	1
+CH3SampMode		ds	1
 
 CH4Ptr			ds	2
 CH4VolPtr		ds	2
@@ -133,5 +138,20 @@ RandomizerEnabled	ds	1
 RandomizerTimer		ds	1
 RandomizerSpeed		ds	1
 
+SampUpdate		ds	1
+SampTranspose	ds	1
+SampBank		ds	1
+SampStart		ds	2
+SampCurAddr		ds	2
+SampCount		ds	2
+SampLoop		ds	2
+SampLength		ds	2
+SampFreq		ds	2
+SampFreqCount	ds	1
+SampCurNybble	ds	1
+SampVol			ds	1
+SampBuffer		ds	16
+
 ArpBuffer			ds	8
+RasterTime			ds	1
 endc
