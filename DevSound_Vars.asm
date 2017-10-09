@@ -143,15 +143,22 @@ SampTranspose	ds	1
 SampBank		ds	1
 SampStart		ds	2
 SampCurAddr		ds	2
-SampCount		ds	2
-SampLoop		ds	2
 SampLength		ds	2
 SampFreq		ds	2
-SampFreqCount	ds	1
-SampCurNybble	ds	1
 SampVol			ds	1
 SampBuffer		ds	16
 
 ArpBuffer			ds	8
 RasterTime			ds	1
+
+SECTION "I need these to load fast",HRAM
+
+SampCurSamp		ds	1
+SampCurNybble	ds	1
+SampCount		ds	2
+SampFreqCount	ds	1
+SampOneShot		ds	1
+SampLoopAddr	ds	2
+SampLoopCount	ds	2
+
 endc

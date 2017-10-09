@@ -43,10 +43,10 @@ endm
 dsmp:			macro
 smp_\1	equ	const_value
 	db	BANK(smpdata_\1)
-	dw	smpdata_\1		; sample data
-	dw	\2 / 2	; length
-	dw	\3 / 2	; loop start (0 = one shot)
-	db	\4		; transpose offset from C-4 (8356Hz)
+	dw	smpdata_\1			; sample data
+	dw	\3 / 2				; length
+	dw	(\3 / 2) - (\2 / 2)	; loop length (0 = one shot)
+	db	\4					; transpose offset from C-4 (8356Hz)
 	endm
 	
 endc

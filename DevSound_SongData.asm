@@ -7,7 +7,7 @@
 ; =================================================================
 
 SongSpeedTable:
-	db	11,6,6			; sample test
+	db	6,6,6			; sample test
 	
 	
 SongPointerTable:
@@ -71,7 +71,7 @@ wave_Bass:		db	$00,$01,$11,$11,$22,$11,$00,$02,$57,$76,$7a,$cc,$ee,$fc,$b1,$23
 
 SampleTable:
 	const_def
-	dsmp majchord, 6144, 3938, 0
+	dsmp majchord, 3938, 6144, 0
 
 ; $fe, nn = sample nn
 ; use $c0 to use the wave buffer
@@ -99,7 +99,7 @@ PT_SampleTest:	dw	DummyChannel,DummyChannel,SampleTest,DummyChannel
 SampleTest
 	db	SetInstrument,id_majchord
 	db	C_5,16,rest,8
-	db	C_5,8,D_5,8,E_5,8,F_5,8,G_5,8,A_5,8,B_5,8,C_6,8
+	db	C_5,8,D_5,8,E_5,8,F_5,8,G_5,8,A_5,8,B_5,8,C_6,32
 	db	rest,8
 	db	EndChannel
 

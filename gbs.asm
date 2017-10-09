@@ -9,8 +9,8 @@ SECTION "GBS Header", ROM0[$390]
 	dw DS_Init       ;init address
 	dw DS_Play       ;play address
 	dw wStack        ;stack pointer
-	db $e7           ;rTMA
-	db $7            ;rTAC
+	db $63           ;rTMA
+	db $6            ;rTAC
 GBS_TitleText:
 	db "Bright Fields of Odd Lights"
 	ds GBS_TitleText - @ + 32
