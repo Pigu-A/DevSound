@@ -13,7 +13,7 @@ UseDecimal	set	0
 
 ; Engine speed (= 4096/(256-x) Hz), -1 to use VBlank
 
-EngineSpeed	set -1
+EngineSpeed	set	197
 
 ; ================================================================
 ; Project includes

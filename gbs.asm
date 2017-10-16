@@ -1,9 +1,9 @@
-SECTION "GBS Header", ROM0[$3f90]
+SECTION "GBS Header", ROM0[$f90]
 	db	"GBS"		; signature
 	db	1			; version
-	db	7			; number of songs
+	db	1			; number of songs
 	db	1			; first song
-	dw	$4000		; load address
+	dw	$1000		; load address
 	dw	DS_Init		; init address
 	dw	DS_Play		; play address
 	dw	$fffe		; stack pointer
@@ -15,17 +15,17 @@ else
 	db	TACF_START + TACF_4KHZ	; rTAC
 endc
 GBS_TitleText:
-	db "DevSound Demo"
+	db "Bright Fields of Odd Lights"
 rept GBS_TitleText - @ + 32
 	db	0	; if ds is used, $ff will be filled instead 
 endr
 GBS_AuthorText:
-	db "DevEd"
+	db "Pigu"
 rept GBS_AuthorText - @ + 32
 	db	0
 endr
 GBS_CopyrightText:
-	db "2017 DevEd"
+	db "2017/09/30"
 rept GBS_CopyrightText - @ + 32
 	db	0
 endr
