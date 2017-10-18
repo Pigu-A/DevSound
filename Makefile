@@ -7,7 +7,7 @@ all: DevSound.gb DevSound.gbs
 %.bin: ;
 DevSound.gb: %.asm %.inc %.bin
 	rgbasm -o DevSound.obj -p 255 Main.asm
-	rgblink -p 255 -o DevSound.gb -n DevSound.sym DevSound.obj
+	rgblink -t -p 255 -o DevSound.gb -n DevSound.sym DevSound.obj
 	rgbfix -v -p 255 DevSound.gb
 
 DevSound.gbs: DevSound.gb

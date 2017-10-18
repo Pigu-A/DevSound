@@ -13,7 +13,7 @@ UseDecimal	set	0
 
 ; Engine speed (= 4096/(256-x) Hz), -1 to use VBlank
 
-EngineSpeed	set -1
+EngineSpeed	set	174
 
 ; ================================================================
 ; Project includes
@@ -162,7 +162,7 @@ else
 	ld	a,EngineSpeed
 	ld	[rTMA],a
 	ld	[rTIMA],a
-	ld	a,TACF_START + TACF_4KHZ
+	ld	a,TACF_START + TACF_16KHZ
 	ld	[rTAC],a
 	ld	a,IEF_VBLANK + IEF_TIMER
 endc
@@ -312,7 +312,7 @@ endc
 MainText:
 ;		 ####################
 	db	"                    "
-	db	"    DevSound v2.0   "
+	db	"    DevSound v2.1   "
 	db	"      by DevEd      "
 	db	"  deved8@gmail.com  "
 	db	"                    "
